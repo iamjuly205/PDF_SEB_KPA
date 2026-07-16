@@ -1328,3 +1328,92 @@ a:hover {
   cursor: crosshair;
   background-color: #ffffff;
 }
+
+/* --- OCR Mode Toggle Bar --- */
+.ocr-mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 14px;
+  gap: 10px;
+}
+
+.ocr-mode-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ocr-mode-label svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.ocr-mode-toggle {
+  display: flex;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.ocr-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.ocr-toggle-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ocr-toggle-btn:hover {
+  background: var(--bg-input);
+  color: var(--text-main);
+}
+
+.ocr-toggle-btn.active {
+  background: var(--primary);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.ocr-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 6px;
+}
+
+.ocr-status-badge.loading {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.ocr-status-badge.ready {
+  background: #d1fae5;
+  color: #059669;
+}

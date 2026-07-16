@@ -11,7 +11,8 @@ document.addEventListener("DOMContentLoaded", () => {
     questions: [],
     editingQuestionId: null,
     processingQueue: [], // Files currently in queue
-    isProcessing: false // Flag to prevent parallel extraction loops
+    isProcessing: false, // Flag to prevent parallel extraction loops
+    ocrMode: "gemini" // "gemini" or "tesseract"
   };
 
   // --- DOM Elements ---
@@ -29,6 +30,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const uploadZone = document.getElementById("upload-zone");
   const fileInput = document.getElementById("file-input");
+  const ocrBtnGemini = document.getElementById("ocr-btn-gemini");
+  const ocrBtnTesseract = document.getElementById("ocr-btn-tesseract");
   const queueCount = document.getElementById("queue-count");
   const queueList = document.getElementById("queue-list");
   const queueEmpty = document.getElementById("queue-empty");
@@ -71,6 +74,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- 1. Theme Configuration & API Key Initialization ---
   updateApiStatusUI();
+
+  // --- 2. OCR Mode Toggle ---
+  ocrBtnGemini.addEventListener("click", () => {
+    state.ocrMode = "gemini";
+    ocrBtnGemini.classList.add("active");
+    ocrBtnTesseract.classList.remove("active");
+  });
+
+  ocrBtnTesseract.addEventListener("click", () => {
+    state.ocrMode = "tesseract";
+    ocrBtnTesseract.classList.add("active");
+    ocrBtnGemini.classList.remove("active");
+    // Pre-warm Tesseract in the background
+    TesseractService.init().catch(err => console.warn("Tesseract init failed:", err));
+  });
 
   // Theme Toggle
   btnThemeToggle.addEventListener("click", () => {
@@ -246,7 +264,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * Sequentially process images in queue to prevent rate limit spikes
+   * Sequentially process images in queue.
+   * Routes to Tesseract (offline) or Gemini (AI API) based on ocrMode.
    */
   async function processNextInQueue() {
     if (state.isProcessing) return;
@@ -263,46 +282,63 @@ document.addEventListener("DOMContentLoaded", () => {
     renderQueueUI();
 
     let extractedData = null;
-    let attempts = 0;
-    const maxAttempts = 4;
 
-    while (attempts < maxAttempts) {
-      try {
-        attempts++;
-        if (attempts > 1) {
-          const waitSec = attempts === 2 ? 20 : 40;
-          nextItem.error = `Bị giới hạn tốc độ (Rate Limit). Đang chờ ${waitSec}s rồi thử lại (Lần ${attempts - 1}/${maxAttempts - 1})...`;
-          nextItem.status = "extracting";
-          renderQueueUI();
-          await new Promise(r => setTimeout(r, waitSec * 1000));
-        }
-
-        nextItem.status = "extracting";
-        nextItem.error = "";
+    try {
+      if (state.ocrMode === "tesseract") {
+        // --- Offline OCR path (no API key, no quotas) ---
+        nextItem.error = "Đang nhận diện chữ (OCR offline)...";
         renderQueueUI();
-
-        extractedData = await GeminiService.extractQuestion(
+        extractedData = await TesseractService.extractQuestion(
           nextItem.base64,
-          nextItem.mimeType,
-          state.apiKey
+          nextItem.mimeType
         );
-        break; // Succeeded!
-      } catch (err) {
-        const errMsg = err.message || "";
-        const isRateLimit = errMsg.includes("429") || 
-                            errMsg.includes("RESOURCE_EXHAUSTED") || 
-                            errMsg.includes("quota") || 
-                            errMsg.includes("Too Many Requests");
+      } else {
+        // --- Gemini AI path (with retry logic) ---
+        let attempts = 0;
+        const maxAttempts = 4;
 
-        if (!isRateLimit || attempts >= maxAttempts) {
-          nextItem.status = "error";
-          nextItem.error = errMsg;
-          renderQueueUI();
-          state.isProcessing = false;
-          setTimeout(processNextInQueue, 3000);
-          return;
+        while (attempts < maxAttempts) {
+          try {
+            attempts++;
+            if (attempts > 1) {
+              const waitSec = attempts === 2 ? 20 : 40;
+              nextItem.error = `Bị giới hạn tốc độ (Rate Limit). Đang chờ ${waitSec}s rồi thử lại (Lần ${attempts - 1}/${maxAttempts - 1})...`;
+              nextItem.status = "extracting";
+              renderQueueUI();
+              await new Promise(r => setTimeout(r, waitSec * 1000));
+            }
+
+            nextItem.status = "extracting";
+            nextItem.error = "";
+            renderQueueUI();
+
+            extractedData = await GeminiService.extractQuestion(
+              nextItem.base64,
+              nextItem.mimeType,
+              state.apiKey
+            );
+            break;
+          } catch (err) {
+            const errMsg = err.message || "";
+            const isRateLimit = errMsg.includes("429") || 
+                                errMsg.includes("RESOURCE_EXHAUSTED") || 
+                                errMsg.includes("quota") || 
+                                errMsg.includes("Too Many Requests");
+
+            if (!isRateLimit || attempts >= maxAttempts) {
+              throw err; // Rethrow to outer catch
+            }
+          }
         }
       }
+    } catch (err) {
+      nextItem.status = "error";
+      nextItem.error = err.message;
+      renderQueueUI();
+      state.isProcessing = false;
+      const nextDelay = state.ocrMode === "tesseract" ? 500 : 3000;
+      setTimeout(processNextInQueue, nextDelay);
+      return;
     }
 
     // Build the question object from extracted data
@@ -374,8 +410,9 @@ document.addEventListener("DOMContentLoaded", () => {
     state.isProcessing = false;
     renderQueueUI();
     
-    // Delay 8 seconds between each image to safely stay under 10 RPM free tier limit
-    setTimeout(processNextInQueue, 8000);
+    // Tesseract: process next immediately; Gemini: wait 8s to respect rate limits
+    const delay = state.ocrMode === "tesseract" ? 300 : 8000;
+    setTimeout(processNextInQueue, delay);
   }
 
   /**

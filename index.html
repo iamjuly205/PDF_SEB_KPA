@@ -19,6 +19,9 @@
   
   <!-- html2pdf.js CDN (Tạo PDF trực tiếp trên client) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <!-- Tesseract.js CDN (OCR offline, nhận diện chữ trực tiếp trên trình duyệt) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body class="light-mode">
   <!-- Giao diện chính -->
@@ -72,6 +75,19 @@
           <h3>Kéo & thả hình ảnh câu hỏi vào đây</h3>
           <p>hoặc <span>chọn file từ máy tính</span></p>
           <span class="upload-hint">Chấp nhận định dạng JPG, PNG, WEBP. Chọn nhiều ảnh cùng lúc.</span>
+        </div>
+
+        <!-- OCR Engine Selector -->
+        <div class="ocr-mode-bar">
+          <span class="ocr-mode-label"><i data-lucide="cpu"></i> Phương thức trích xuất:</span>
+          <div class="ocr-mode-toggle">
+            <button id="ocr-btn-gemini" class="ocr-toggle-btn active" title="Dùng Gemini AI (Cần API Key, thông minh hơn)">
+              <i data-lucide="sparkles"></i> Gemini AI
+            </button>
+            <button id="ocr-btn-tesseract" class="ocr-toggle-btn" title="Dùng OCR Offline (Không cần API Key)">
+              <i data-lucide="scan-text"></i> OCR Offline
+            </button>
+          </div>
         </div>
 
         <!-- Uploaded Images Queue -->
@@ -292,6 +308,7 @@
 
   <!-- Javascript Modules -->
   <script src="js/gemini_service.js"></script>
+  <script src="js/tesseract_service.js"></script>
   <script src="js/cropper.js"></script>
   <script src="js/pdf_generator.js"></script>
   <script src="js/app.js"></script>
