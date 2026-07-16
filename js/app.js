@@ -345,8 +345,8 @@ document.addEventListener("DOMContentLoaded", () => {
     state.isProcessing = false;
     renderQueueUI();
     
-    // Continue processing rest of the queue
-    processNextInQueue();
+    // Continue processing rest of the queue with a 2-second safety delay to avoid Gemini API Rate Limits (429)
+    setTimeout(processNextInQueue, 2000);
   }
 
   /**

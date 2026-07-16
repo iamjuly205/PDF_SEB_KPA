@@ -100,9 +100,15 @@ Trả về kết quả ở định dạng JSON phù hợp với lược đồ (s
         throw new Error("Không nhận được dữ liệu phản hồi từ AI.");
       }
 
-      // Parse JSON từ phản hồi của Gemini
+      // Parse JSON từ phản hồi của Gemini (dọn dẹp markdown block nếu có)
+      let cleanedText = textResponse.trim();
+      if (cleanedText.startsWith("```")) {
+        cleanedText = cleanedText.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/, "");
+      }
+      cleanedText = cleanedText.trim();
+
       try {
-        const parsedQuestion = JSON.parse(textResponse);
+        const parsedQuestion = JSON.parse(cleanedText);
         return parsedQuestion;
       } catch (parseError) {
         console.error("Lỗi parse JSON kết quả Gemini:", textResponse);
