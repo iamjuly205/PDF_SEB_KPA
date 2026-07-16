@@ -16,7 +16,7 @@ const GeminiService = {
       throw new Error("Vui lòng cấu hình Gemini API Key trước khi thực hiện trích xuất.");
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
     const prompt = `Bạn là một trợ lý AI chuyên nghiệp về số hóa đề thi.
 Hãy phân tích hình ảnh câu hỏi được cung cấp và trích xuất nội dung chính xác.
@@ -131,7 +131,7 @@ Trả về kết quả ở định dạng JSON phù hợp với lược đồ (s
       throw new Error("Vui lòng cấu hình Gemini API Key trước khi thực hiện trích xuất.");
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
     const prompt = `Bạn là một trợ lý AI chuyên nghiệp về số hóa đề thi.
 Bạn sẽ nhận được một danh sách gồm một hoặc nhiều hình ảnh chứa các câu hỏi độc lập được gửi kèm bên dưới.

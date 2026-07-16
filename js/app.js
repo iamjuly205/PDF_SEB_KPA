@@ -374,8 +374,8 @@ document.addEventListener("DOMContentLoaded", () => {
     state.isProcessing = false;
     renderQueueUI();
     
-    // Delay 4 seconds between each image to stay well within 15 RPM free tier limit
-    setTimeout(processNextInQueue, 4000);
+    // Delay 8 seconds between each image to safely stay under 10 RPM free tier limit
+    setTimeout(processNextInQueue, 8000);
   }
 
   /**
