@@ -42,6 +42,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const croppedPreviewContainer = document.getElementById("cropped-preview-container");
   const editorCroppedImg = document.getElementById("editor-cropped-img");
   const btnRemoveCropped = document.getElementById("btn-remove-cropped");
+  const btnUploadEditorImg = document.getElementById("btn-upload-editor-img");
+  const editorImageUpload = document.getElementById("editor-image-upload");
   const editQuestionText = document.getElementById("edit-question-text");
   const btnAddOption = document.getElementById("btn-add-option");
   const editorOptionsContainer = document.getElementById("editor-options-container");
@@ -911,6 +913,52 @@ document.addEventListener("DOMContentLoaded", () => {
       btnDownloadPdf.disabled = false;
       btnDownloadPdf.innerHTML = originalText;
     }
+  });
+
+  // --- 9. Manual Question Creation and Image Upload ---
+  
+  // Add Question Manually click handler
+  btnAddCustomQuestion.addEventListener("click", () => {
+    const newQuestion = {
+      id: "q_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+      questionNumber: (state.questions.length + 1).toString(),
+      questionText: "Nhập nội dung câu hỏi tự luận hoặc trắc nghiệm tại đây...",
+      originalImage: null,
+      croppedImage: null,
+      options: [] // Starts as essay, they can click "Thêm đáp án" to make it multiple choice
+    };
+
+    state.questions.push(newQuestion);
+    renderQuestionsList();
+    openEditor(newQuestion.id);
+  });
+
+  // Editor manual image upload button trigger
+  btnUploadEditorImg.addEventListener("click", () => {
+    editorImageUpload.click();
+  });
+
+  // Editor manual image input change handler
+  editorImageUpload.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const qIndex = state.questions.findIndex(q => q.id === state.editingQuestionId);
+    if (qIndex === -1) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64Data = event.target.result;
+      state.questions[qIndex].originalImage = base64Data;
+      
+      // Update editor original image preview
+      editorOriginalImg.src = base64Data;
+      btnCropIllustration.style.display = "inline-flex";
+      
+      // Reset input value so same image can be reselected
+      editorImageUpload.value = "";
+    };
+    reader.readAsDataURL(file);
   });
 
   // --- Utility Helpers ---

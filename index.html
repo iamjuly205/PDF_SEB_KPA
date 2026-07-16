@@ -109,7 +109,13 @@
                 <div class="img-wrapper">
                   <img id="editor-original-img" src="" alt="Câu hỏi gốc">
                 </div>
-                <button id="btn-crop-illustration" class="action-btn secondary">
+                <div class="manual-upload-box" style="margin: 8px 0 12px 0;">
+                  <input type="file" id="editor-image-upload" accept="image/*" style="display: none;">
+                  <button id="btn-upload-editor-img" class="action-btn secondary" style="width: 100%; justify-content: center; font-size: 13px; padding: 6px 12px;">
+                    <i data-lucide="image"></i> Chọn ảnh câu hỏi
+                  </button>
+                </div>
+                <button id="btn-crop-illustration" class="action-btn secondary" style="width: 100%; justify-content: center;">
                   <i data-lucide="crop"></i> Cắt hình minh hoạ
                 </button>
                 <div id="cropped-preview-container" class="cropped-preview hidden">
