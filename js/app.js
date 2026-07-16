@@ -248,104 +248,167 @@ document.addEventListener("DOMContentLoaded", () => {
   async function processNextInQueue() {
     if (state.isProcessing) return;
 
-    const nextItem = state.processingQueue.find(item => item.status === "pending");
-    if (!nextItem) {
+    const pendingItems = state.processingQueue.filter(item => item.status === "pending").slice(0, 5);
+    if (pendingItems.length === 0) {
       state.isProcessing = false;
       return;
     }
 
     state.isProcessing = true;
-    nextItem.status = "extracting";
+    
+    // Set all pending items in batch to extracting
+    pendingItems.forEach(item => {
+      item.status = "extracting";
+      item.error = "";
+    });
     renderQueueUI();
 
-    try {
-      // Call Gemini Service
-      const extractedData = await GeminiService.extractQuestion(
-        nextItem.base64,
-        nextItem.mimeType,
-        state.apiKey
-      );
+    let extractedDataList = null;
+    let attempts = 0;
+    const maxAttempts = 3;
 
-      // Create new question object
-      const newQuestion = {
-        id: "q_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
-        questionNumber: extractedData.question_number || (state.questions.length + 1).toString(),
-        questionText: extractedData.question_text || "",
-        originalImage: `data:${nextItem.mimeType};base64,${nextItem.base64}`,
-        croppedImage: null,
-        options: extractedData.options || []
-      };
-
-      // Auto crop illustration if provided by Gemini coordinates
-      if (extractedData.has_illustration && 
-          extractedData.illustration_box && 
-          extractedData.illustration_box.length === 4) {
-        try {
-          const croppedDataURL = await new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-              const canvas = document.createElement("canvas");
-              let [ymin, xmin, ymax, xmax] = extractedData.illustration_box;
-              
-              // Handle float (0-1), percent (0-100), or Gemini default (0-1000)
-              let divisor = 1;
-              const maxVal = Math.max(ymin, xmin, ymax, xmax);
-              if (maxVal > 100) {
-                divisor = 1000;
-              } else if (maxVal > 1) {
-                divisor = 100;
-              }
-              
-              const x = Math.max(0, (xmin / divisor) * img.naturalWidth);
-              const y = Math.max(0, (ymin / divisor) * img.naturalHeight);
-              const w = Math.min(img.naturalWidth - x, ((xmax - xmin) / divisor) * img.naturalWidth);
-              const h = Math.min(img.naturalHeight - y, ((ymax - ymin) / divisor) * img.naturalHeight);
-              
-              if (w > 10 && h > 10) {
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext("2d");
-                ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
-                resolve(canvas.toDataURL("image/png"));
-              } else {
-                resolve(null);
-              }
-            };
-            img.onerror = () => resolve(null);
-            img.src = newQuestion.originalImage;
+    while (attempts < maxAttempts) {
+      try {
+        attempts++;
+        if (attempts > 1) {
+          pendingItems.forEach(item => {
+            item.error = `Bị giới hạn tốc độ AI (Rate Limit 429). Đang chờ 15s để tự động thử lại (Lần ${attempts - 1}/${maxAttempts - 1})...`;
           });
-          
-          if (croppedDataURL) {
-            newQuestion.croppedImage = croppedDataURL;
+          renderQueueUI();
+          await new Promise(r => setTimeout(r, 15000));
+        }
+
+        pendingItems.forEach(item => {
+          item.status = "extracting";
+        });
+        renderQueueUI();
+
+        // Map pending items to base64 images list
+        const imagesPayload = pendingItems.map(item => ({
+          base64: item.base64,
+          mimeType: item.mimeType
+        }));
+
+        extractedDataList = await GeminiService.extractQuestionsBatch(
+          imagesPayload,
+          state.apiKey
+        );
+        break; // Succeeded! Break out of the retry loop.
+      } catch (err) {
+        const errMsg = err.message || "";
+        const isRateLimit = errMsg.includes("429") || 
+                            errMsg.includes("RESOURCE_EXHAUSTED") || 
+                            errMsg.includes("quota") || 
+                            errMsg.includes("limit") || 
+                            errMsg.includes("Too Many Requests");
+
+        if (!isRateLimit || attempts >= maxAttempts) {
+          // Permanently fail all items in this batch
+          pendingItems.forEach(item => {
+            item.status = "error";
+            item.error = errMsg;
+          });
+          renderQueueUI();
+          state.isProcessing = false;
+          // Schedule next batch
+          setTimeout(processNextInQueue, 2000);
+          return;
+        }
+      }
+    }
+
+    // Process the successfully extracted batch
+    try {
+      for (const qData of extractedDataList) {
+        const imageIndex = qData.image_index;
+        const originalItem = pendingItems[imageIndex];
+        if (!originalItem) continue;
+
+        // Create new question object
+        const newQuestion = {
+          id: "q_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+          questionNumber: qData.question_number || (state.questions.length + 1).toString(),
+          questionText: qData.question_text || "",
+          originalImage: `data:${originalItem.mimeType};base64,${originalItem.base64}`,
+          croppedImage: null,
+          options: qData.options || []
+        };
+
+        // Auto crop illustration if provided by Gemini coordinates
+        if (qData.has_illustration && 
+            qData.illustration_box && 
+            qData.illustration_box.length === 4) {
+          try {
+            const croppedDataURL = await new Promise((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                const canvas = document.createElement("canvas");
+                let [ymin, xmin, ymax, xmax] = qData.illustration_box;
+                
+                // Handle float (0-1), percent (0-100), or Gemini default (0-1000)
+                let divisor = 1;
+                const maxVal = Math.max(ymin, xmin, ymax, xmax);
+                if (maxVal > 100) {
+                  divisor = 1000;
+                } else if (maxVal > 1) {
+                  divisor = 100;
+                }
+                
+                const x = Math.max(0, (xmin / divisor) * img.naturalWidth);
+                const y = Math.max(0, (ymin / divisor) * img.naturalHeight);
+                const w = Math.min(img.naturalWidth - x, ((xmax - xmin) / divisor) * img.naturalWidth);
+                const h = Math.min(img.naturalHeight - y, ((ymax - ymin) / divisor) * img.naturalHeight);
+                
+                if (w > 10 && h > 10) {
+                  canvas.width = w;
+                  canvas.height = h;
+                  const ctx = canvas.getContext("2d");
+                  ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+                  resolve(canvas.toDataURL("image/png"));
+                } else {
+                  resolve(null);
+                }
+              };
+              img.onerror = () => resolve(null);
+              img.src = newQuestion.originalImage;
+            });
+            
+            if (croppedDataURL) {
+              newQuestion.croppedImage = croppedDataURL;
+            }
+          } catch (cropErr) {
+            console.error("Lỗi tự động cắt hình:", cropErr);
           }
-        } catch (cropErr) {
-          console.error("Lỗi tự động cắt hình:", cropErr);
+        }
+
+        // Add to main questions list
+        state.questions.push(newQuestion);
+        
+        // If the model suggests there is an illustration, automatically prompt editing/cropping
+        if (qData.has_illustration) {
+          openEditor(newQuestion.id);
         }
       }
 
-      // Add to main questions list
-      state.questions.push(newQuestion);
-      
-      // Update queue item
-      nextItem.status = "done";
-      
+      // Mark all items in this batch as done
+      pendingItems.forEach(item => {
+        item.status = "done";
+      });
+
       // Render components
       renderQuestionsList();
-      
-      // If the model suggests there is an illustration, automatically prompt editing/cropping
-      if (extractedData.has_illustration) {
-        openEditor(newQuestion.id);
-      }
     } catch (err) {
       console.error(err);
-      nextItem.status = "error";
-      nextItem.error = err.message;
+      pendingItems.forEach(item => {
+        item.status = "error";
+        item.error = err.message;
+      });
     }
 
     state.isProcessing = false;
     renderQueueUI();
     
-    // Continue processing rest of the queue with a 2-second safety delay to avoid Gemini API Rate Limits (429)
+    // Continue processing rest of the queue with a 2-second safety delay
     setTimeout(processNextInQueue, 2000);
   }
 
