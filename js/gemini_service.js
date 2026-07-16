@@ -177,7 +177,7 @@ Trả về kết quả ở định dạng JSON phù hợp với lược đồ (s
                 type: "OBJECT",
                 properties: {
                   image_index: {
-                    type: "INTEGER",
+                    type: "NUMBER",
                     description: "Chỉ số index của hình ảnh tương ứng trong danh sách ảnh gửi lên, bắt đầu từ 0."
                   },
                   question_number: { 

@@ -442,8 +442,13 @@ document.addEventListener("DOMContentLoaded", () => {
         statusIcon = `<i data-lucide="check-circle" class="status-done"></i>`;
         statusText = `<span class="status-done">Hoàn thành</span>`;
       } else {
-        statusIcon = `<i data-lucide="alert-triangle" class="status-error" title="${item.error}"></i>`;
-        statusText = `<span class="status-error">Lỗi trích xuất</span>`;
+        statusIcon = `<i data-lucide="alert-triangle" class="status-error" title="${escapeHtml(item.error || "")}"></i>`;
+        statusText = `
+          <span class="status-error">Lỗi trích xuất</span>
+          <div style="font-size: 11px; color: var(--destructive); word-break: break-word; margin-top: 2px; line-height: 1.3;">
+            ${escapeHtml(item.error || "")}
+          </div>
+        `;
       }
 
       // Convert thumbnail
