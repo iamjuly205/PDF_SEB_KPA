@@ -1,0 +1,116 @@
+/**
+ * Gemini API Service Module
+ * Handles OCR and structured question extraction from screenshots.
+ */
+
+const GeminiService = {
+  /**
+   * Sends an image to the Gemini API and returns a structured question object.
+   * @param {string} base64Data - Base64 encoded image data (without prefix)
+   * @param {string} mimeType - The mime type of the image (e.g., 'image/png')
+   * @param {string} apiKey - Google Gemini API Key
+   * @returns {Promise<Object>} The structured question data
+   */
+  async extractQuestion(base64Data, mimeType, apiKey) {
+    if (!apiKey) {
+      throw new Error("Vui lòng cấu hình Gemini API Key trước khi thực hiện trích xuất.");
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+    const prompt = `Bạn là một trợ lý AI chuyên nghiệp về số hóa đề thi.
+Hãy phân tích hình ảnh câu hỏi được cung cấp và trích xuất nội dung chính xác.
+Đặc biệt lưu ý:
+1. Đề bài có thể chứa chữ tiếng Trung (Hán tự), tiếng Việt và tiếng Anh. Hãy trích xuất nguyên trạng tất cả ngôn ngữ.
+2. Trích xuất nội dung câu hỏi một cách chi tiết (bao gồm cả chỉ dẫn nếu có, ví dụ: 'Xem hình và cho biết...', 'Đọc và chọn từ...').
+3. Nhận diện các phương án lựa chọn và tách chúng ra thành một danh sách (mảng). Bỏ qua các ký tự đầu dạng hình tròn nút bấm trắc nghiệm hoặc chữ cái A, B, C, D ở đầu đáp án nếu có, chỉ lấy nội dung văn bản của đáp án.
+4. BẤT KỲ câu hỏi nào chứa hình vẽ, tranh minh hoạ, ảnh chụp vật thể (như cái bàn, cái ghế, con vật, phong cảnh...), biểu đồ, sơ đồ nằm bên trong đề bài thì ĐỀU BẮT BUỘC phải đặt has_illustration = true.
+5. CỰC KỲ QUAN TRỌNG VỀ XUỐNG DÒNG: Hãy giữ nguyên cấu trúc dòng và các ký tự xuống dòng (\\n) từ hình ảnh gốc. Không được tự ý gộp các câu hướng dẫn, các lưu ý gạch đầu dòng (bullet points) hay các phần khác nhau của câu hỏi thành một hàng liên tục. Hãy sử dụng ký tự xuống dòng '\\n' để phân tách rõ ràng các phần này trong văn bản câu hỏi (ví dụ: tránh gộp dính chữ dạng 'tiếng Trung:Lưu ý:Cuối câu').
+6. HỘP BAO HÌNH MINH HỌA (illustration_box): Khi has_illustration = true, hãy phân tích tọa độ của vùng hình ảnh minh họa đó trong ảnh gốc. Cung cấp tọa độ [ymin, xmin, ymax, xmax] dưới dạng tỷ lệ phần trăm từ 0 đến 100 (Ví dụ: [20, 15, 65, 80]).
+   Nếu không có hình vẽ minh họa, trả về mảng rỗng [].
+
+Trả về kết quả ở định dạng JSON phù hợp với lược đồ (schema) yêu cầu.`;
+
+    const requestBody = {
+      contents: [
+        {
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data
+              }
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            question_number: { 
+              type: "STRING",
+              description: "Số thứ tự của câu hỏi nếu có trong hình, ví dụ '7' hoặc '10'. Nếu không tìm thấy, để trống."
+            },
+            question_text: { 
+              type: "STRING", 
+              description: "Văn bản câu hỏi đầy đủ. CỰC KỲ QUAN TRỌNG: Nếu câu hỏi có nhiều dòng chỉ dẫn, lưu ý gạch đầu dòng, hoặc phần hướng dẫn dịch nghĩa tiếng Trung và tiếng Việt riêng biệt, bắt buộc phải sử dụng ký tự xuống dòng \\n để phân tách từng dòng riêng biệt, tuyệt đối không gộp chung tất cả thành một hàng liên tục." 
+            },
+            has_illustration: { 
+              type: "BOOLEAN", 
+              description: "Đặt là true nếu trong câu hỏi có tranh minh họa, sơ đồ, biểu đồ cần giữ lại. Đặt false nếu chỉ có chữ."
+            },
+            options: {
+              type: "ARRAY",
+              description: "Danh sách các đáp án lựa chọn trắc nghiệm. Trích xuất riêng biệt từng lựa chọn.",
+              items: { type: "STRING" }
+            },
+            illustration_box: {
+              type: "ARRAY",
+              description: "Mảng gồm 4 số nguyên [ymin, xmin, ymax, xmax] biểu diễn tỷ lệ phần trăm vùng chứa hình minh họa (0-100). Trả về mảng rỗng [] nếu has_illustration = false.",
+              items: { type: "INTEGER" }
+            }
+          },
+          required: ["question_number", "question_text", "has_illustration", "options", "illustration_box"]
+        }
+      }
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error?.message || `HTTP error! status: ${response.status}`;
+        throw new Error(`Gemini API Error: ${errorMessage}`);
+      }
+
+      const result = await response.json();
+      const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      
+      if (!textResponse) {
+        throw new Error("Không nhận được dữ liệu phản hồi từ AI.");
+      }
+
+      // Parse JSON từ phản hồi của Gemini
+      try {
+        const parsedQuestion = JSON.parse(textResponse);
+        return parsedQuestion;
+      } catch (parseError) {
+        console.error("Lỗi parse JSON kết quả Gemini:", textResponse);
+        throw new Error("Dữ liệu phản hồi của AI không đúng định dạng JSON yêu cầu.");
+      }
+    } catch (error) {
+      console.error("Lỗi trong quá trình gọi API Gemini:", error);
+      throw error;
+    }
+  }
+};

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuizExtract - Trích xuất đề thi & Tạo PDF từ hình ảnh</title>
+  <meta name="description" content="Trích xuất câu hỏi từ ảnh chụp màn hình bằng AI, tự động định dạng đáp án ABCD và biên soạn thành đề thi PDF chất lượng cao.">
+  
+  <!-- Google Fonts: Inter & Noto Sans SC (Hỗ trợ tiếng Việt và tiếng Trung) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- html2pdf.js CDN (Tạo PDF trực tiếp trên client) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body class="light-mode">
+  <!-- Giao diện chính -->
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-logo">
+        <div class="logo-icon">
+          <i data-lucide="file-text"></i>
+        </div>
+        <div class="logo-text">
+          <h1>Quiz<span>Extract</span></h1>
+          <p>AI-Powered Exam Builder</p>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <!-- API Key Status Indicator -->
+        <button id="btn-api-status" class="api-status-btn warning" title="Nhấp để cấu hình API Key">
+          <span class="status-dot"></span>
+          <span class="status-label">Chưa cấu hình API Key</span>
+        </button>
+        
+        <!-- Light/Dark Mode Toggle -->
+        <button id="btn-theme-toggle" class="icon-btn" title="Chuyển chế độ sáng/tối">
+          <i data-lucide="moon" id="icon-theme"></i>
+        </button>
+
+        <!-- Settings Button -->
+        <button id="btn-open-settings" class="icon-btn" title="Cài đặt">
+          <i data-lucide="settings"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Nội dung chính chia hai cột -->
+    <main class="app-main">
+      <!-- Cột bên trái: Upload, Queue & Biên tập -->
+      <section class="left-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i data-lucide="upload-cloud"></i>
+            <h2>Tải lên & Xử lý câu hỏi</h2>
+          </div>
+        </div>
+
+        <!-- Drag & Drop Uploader -->
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" id="file-input" multiple accept="image/*" class="file-input-hidden">
+          <i data-lucide="image" class="upload-icon"></i>
+          <h3>Kéo & thả hình ảnh câu hỏi vào đây</h3>
+          <p>hoặc <span>chọn file từ máy tính</span></p>
+          <span class="upload-hint">Chấp nhận định dạng JPG, PNG, WEBP. Chọn nhiều ảnh cùng lúc.</span>
+        </div>
+
+        <!-- Uploaded Images Queue -->
+        <div class="queue-section">
+          <div class="section-title-bar">
+            <h3>Danh sách hình ảnh tải lên (<span id="queue-count">0</span>)</h3>
+            <button id="btn-clear-queue" class="text-btn danger" title="Xóa tất cả ảnh tải lên">
+              <i data-lucide="trash-2"></i> Xóa tất cả
+            </button>
+          </div>
+          <div class="queue-list" id="queue-list">
+            <!-- Trạng thái trống -->
+            <div class="empty-state" id="queue-empty">
+              <i data-lucide="inbox"></i>
+              <p>Chưa có hình ảnh nào được tải lên.</p>
+              <p class="sub-text">Hãy kéo thả hoặc click chọn hình ảnh câu hỏi phía trên.</p>
+            </div>
+            <!-- Các thẻ ảnh trong hàng đợi sẽ được tạo bằng JS -->
+          </div>
+        </div>
+
+        <!-- Question Editor (Ẩn theo mặc định, chỉ hiện khi click sửa câu hỏi) -->
+        <div class="editor-section hidden" id="editor-section">
+          <div class="section-title-bar">
+            <h3><i data-lucide="edit-3"></i> Chỉnh sửa câu hỏi <span id="editing-index-label">#1</span></h3>
+            <button id="btn-close-editor" class="icon-btn-sm" title="Đóng biên tập">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+          <div class="editor-card">
+            <!-- Giao diện chia đôi trong editor: bên trái xem ảnh, bên phải sửa form -->
+            <div class="editor-grid">
+              <div class="editor-preview-img-box">
+                <span class="label">Hình ảnh gốc:</span>
+                <div class="img-wrapper">
+                  <img id="editor-original-img" src="" alt="Câu hỏi gốc">
+                </div>
+                <button id="btn-crop-illustration" class="action-btn secondary">
+                  <i data-lucide="crop"></i> Cắt hình minh hoạ
+                </button>
+                <div id="cropped-preview-container" class="cropped-preview hidden">
+                  <span class="label">Ảnh đã cắt:</span>
+                  <div class="cropped-img-wrapper">
+                    <img id="editor-cropped-img" src="" alt="Hình minh họa đã cắt">
+                  </div>
+                  <button id="btn-remove-cropped" class="text-btn danger">
+                    <i data-lucide="trash-2"></i> Xóa ảnh minh họa
+                  </button>
+                </div>
+              </div>
+              
+              <div class="editor-form-box">
+                <div class="form-group">
+                  <label for="edit-question-text">Nội dung câu hỏi:</label>
+                  <textarea id="edit-question-text" rows="4" placeholder="Nhập nội dung câu hỏi tại đây..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                  <div class="options-header">
+                    <label>Danh sách các đáp án:</label>
+                    <button id="btn-add-option" class="text-btn primary"><i data-lucide="plus"></i> Thêm đáp án</button>
+                  </div>
+                  <div id="editor-options-container" class="editor-options-list">
+                    <!-- Danh sách đáp án được render bằng JS -->
+                  </div>
+                </div>
+                
+                <div class="editor-actions">
+                  <button id="btn-cancel-edit" class="action-btn secondary">Hủy bỏ</button>
+                  <button id="btn-save-edit" class="action-btn primary"><i data-lucide="save"></i> Cập nhật câu hỏi</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cột bên phải: Cấu hình PDF & Live Preview -->
+      <section class="right-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i data-lucide="eye"></i>
+            <h2>Xem trước & Thiết lập PDF</h2>
+          </div>
+          <div class="panel-actions">
+            <button id="btn-add-custom-question" class="action-btn secondary btn-sm" title="Thêm câu hỏi trống bằng tay">
+              <i data-lucide="plus-circle"></i> Thêm câu hỏi tay
+            </button>
+            <button id="btn-download-pdf" class="action-btn primary" title="Xuất toàn bộ đề thi ra file PDF">
+              <i data-lucide="download"></i> Tải PDF về máy
+            </button>
+          </div>
+        </div>
+
+        <!-- PDF Configuration Panel -->
+        <div class="pdf-config-bar">
+          <div class="config-grid">
+            <div class="form-group">
+              <label for="cfg-subject-code">Môn học:</label>
+              <input type="text" id="cfg-subject-code" value="CHN113_SU26_SEB">
+            </div>
+            <div class="form-group">
+              <label for="cfg-choices-layout">Bố cục đáp án:</label>
+              <select id="cfg-choices-layout">
+                <option value="auto">Tự động (Dọc/Ngang dựa vào độ dài)</option>
+                <option value="1col">1 Cột (Mỗi đáp án 1 dòng)</option>
+                <option value="2col">2 Cột (2 đáp án trên 1 dòng)</option>
+                <option value="4col">4 Cột (Tất cả trên 1 dòng)</option>
+              </select>
+            </div>
+            <div class="form-group checkbox-group">
+              <label for="cfg-watermark-enable" class="checkbox-label">
+                <input type="checkbox" id="cfg-watermark-enable" checked>
+                <span>Hiện chữ chìm (Watermark)</span>
+              </label>
+            </div>
+            <div class="form-group">
+              <label for="cfg-watermark-text">Nội dung Watermark:</label>
+              <input type="text" id="cfg-watermark-text" value="ĐỀ THI THỬ">
+            </div>
+          </div>
+        </div>
+
+        <!-- A4 Page Container (Giao diện xem trước PDF thực tế) -->
+        <div class="pdf-preview-outer">
+          <div class="pdf-page-container" id="pdf-to-print" data-watermark="ĐỀ THI THỬ">
+            <!-- Header đề thi mẫu tối giản -->
+            <div class="pdf-header-wrapper">
+              <div class="pdf-header-subject-simple">
+                <span>MÔN HỌC:</span> <strong id="pdf-view-subject-code" contenteditable="true">CHN113_SU26_SEB</strong>
+              </div>
+            </div>
+            
+            <!-- Danh sách câu hỏi sẽ render vào đây -->
+            <div class="pdf-questions-list" id="pdf-questions-list">
+              <!-- Trạng thái trống của đề thi -->
+              <div class="pdf-empty-state" id="pdf-empty-state">
+                <i data-lucide="file-question"></i>
+                <p>Nội dung đề thi trống.</p>
+                <p>Các câu hỏi sau khi trích xuất hoặc thêm thủ công sẽ xuất hiện tại đây theo định dạng chuẩn A4.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Settings Modal (Nhập API Key) -->
+  <div class="modal-backdrop hidden" id="modal-settings">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2><i data-lucide="settings"></i> Cấu hình Google Gemini API</h2>
+        <button id="btn-close-settings" class="icon-btn-sm" title="Đóng"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p>Để trích xuất đề thi từ ảnh chụp chất lượng cao, ứng dụng sử dụng AI từ mô hình <strong>Gemini 2.5 Flash</strong> của Google.</p>
+        
+        <div class="form-group">
+          <label for="settings-api-key">Gemini API Key của bạn:</label>
+          <div class="api-key-input-wrapper">
+            <input type="password" id="settings-api-key" placeholder="Nhập API Key (AIzaSy...)">
+            <button id="btn-toggle-key-visibility" class="icon-btn-sm" title="Ẩn/Hiện Key">
+              <i data-lucide="eye" id="icon-eye-key"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="api-help-box">
+          <h4><i data-lucide="help-circle"></i> Làm thế nào để lấy API Key miễn phí?</h4>
+          <ol>
+            <li>Truy cập vào <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">Google AI Studio <i data-lucide="external-link" class="inline-icon"></i></a> và đăng nhập bằng tài khoản Google.</li>
+            <li>Click chọn nút **"Get API key"** màu xanh dương ở góc trên bên trái.</li>
+            <li>Chọn **"Create API key"**, chọn dự án hoặc tạo dự án mới và sao chép mã Key (bắt đầu bằng `AIzaSy...`).</li>
+            <li>Dán mã đó vào ô nhập liệu ở trên và bấm **Lưu cấu hình**.</li>
+          </ol>
+          <div class="alert-info">
+            <i data-lucide="shield-check"></i>
+            <span><strong>Bảo mật:</strong> API Key của bạn chỉ được lưu cục bộ trên trình duyệt này và không bao giờ được gửi tới bất kỳ máy chủ trung gian nào ngoại trừ máy chủ API chính thức của Google.</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-clear-settings" class="action-btn secondary text-danger">Xóa Key</button>
+        <button id="btn-save-settings" class="action-btn primary">Lưu cấu hình</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Cropper Modal (Cắt hình minh hoạ câu hỏi) -->
+  <div class="modal-backdrop hidden" id="modal-cropper">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h2><i data-lucide="crop"></i> Cắt hình ảnh minh họa</h2>
+        <button id="btn-close-cropper" class="icon-btn-sm" title="Đóng"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="crop-instructions">Nhấp chuột và kéo tạo khung chữ nhật để chọn khu vực hình ảnh bạn muốn cắt làm hình minh họa cho câu hỏi này.</p>
+        <div class="cropper-container">
+          <canvas id="cropper-canvas"></canvas>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-cropper" class="action-btn secondary">Hủy bỏ</button>
+        <button id="btn-confirm-cropper" class="action-btn primary"><i data-lucide="check"></i> Xác nhận cắt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Javascript Modules -->
+  <script src="js/gemini_service.js"></script>
+  <script src="js/cropper.js"></script>
+  <script src="js/pdf_generator.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
